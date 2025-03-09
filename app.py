@@ -8,6 +8,8 @@ import os
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
@@ -20,7 +22,7 @@ import config
 from utils.helpers import calculate_anomaly_score
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
-app.secret_key = os.urandom(24)  # For session management
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  # For session management
 CORS(app)  # Enable Cross-Origin Resource Sharing
 
 # Global cache for model and data processor to avoid reloading
@@ -52,6 +54,11 @@ def index():
         session['readings'] = []
     
     return render_template('index.html')
+
+@app.route('/health')
+def health_page():
+    """Render the health check page."""
+    return render_template('health.html')
 
 @app.route('/add_reading', methods=['POST'])
 def add_reading():
@@ -186,7 +193,11 @@ def predict():
                 malaria_concerns.append("Elevated heart rate")
             
             reading_analysis.append({
-                'reading': reading,
+                'reading': {
+                    'temperature': reading['temperature'],
+                    'spo2': reading['spo2'],
+                    'heart_rate': reading['heart_rate']
+                },
                 'anomaly_score': score,
                 'concern_level': concern,
                 'malaria_concerns': malaria_concerns
@@ -248,17 +259,29 @@ def predict():
         return jsonify(response)
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
-if __name__ == '__main__':
-    # Create necessary directories if they don't exist
-    os.makedirs('static', exist_ok=True)
-    os.makedirs('templates', exist_ok=True)
-    
-    # Check if the model exists, otherwise warn
-    model_path = config.MODEL_SAVE_PATH
-    if not os.path.exists(model_path):
-        print(f"WARNING: Model file not found at {model_path}")
-        print("The application will use anomaly score calculation for predictions.")
-    
+# Vercel serverless function handler
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for Vercel."""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat()
+    })
+
+# Create necessary directories if they don't exist
+os.makedirs('static', exist_ok=True)
+os.makedirs('templates', exist_ok=True)
+os.makedirs('models', exist_ok=True)
+
+# Check if the model exists, otherwise warn
+model_path = config.MODEL_SAVE_PATH
+if not os.path.exists(model_path):
+    print(f"WARNING: Model file not found at {model_path}")
+    print("The application will use anomaly score calculation for predictions.")
+
+# This is for local development only - Vercel will use the app object
+if __name__ == '__main__':    
     app.run(debug=True, host='0.0.0.0', port=5000) 

@@ -18,6 +18,17 @@ class DataProcessor:
         """Initialize the data processor."""
         self.scaler = StandardScaler()
         self.is_scaler_fitted = False
+        # Initialize with default feature ranges for fallback scaling
+        self.feature_means = {
+            'temperature': 37.2,  # Normal body temperature average
+            'spo2': 96.5,         # Normal SpO2 average
+            'heart_rate': 80      # Normal heart rate average
+        }
+        self.feature_stds = {
+            'temperature': 1.0,   # Standard deviation for temperature
+            'spo2': 3.0,          # Standard deviation for SpO2
+            'heart_rate': 15.0    # Standard deviation for heart rate
+        }
     
     def load_data(self, file_path):
         """
@@ -56,15 +67,30 @@ class DataProcessor:
         # Sort by timestamp
         data = data.sort_values(by=config.TIMESTAMP_COL)
         
-        # Scale features
-        if fit_scaler or not self.is_scaler_fitted:
-            self.scaler.fit(data[config.FEATURES])
-            self.is_scaler_fitted = True
+        try:
+            # Scale features
+            if fit_scaler or not self.is_scaler_fitted:
+                self.scaler.fit(data[config.FEATURES])
+                self.is_scaler_fitted = True
+                
+                # Save the scaler
+                try:
+                    os.makedirs(os.path.dirname(config.SCALER_SAVE_PATH), exist_ok=True)
+                    joblib.dump(self.scaler, config.SCALER_SAVE_PATH)
+                except Exception as e:
+                    print(f"Warning: Could not save scaler: {str(e)}")
             
-            # Save the scaler
-            joblib.dump(self.scaler, config.SCALER_SAVE_PATH)
+            scaled_features = self.scaler.transform(data[config.FEATURES])
+        except Exception as e:
+            print(f"Warning: Error using scaler: {str(e)}. Falling back to manual scaling.")
+            # Fallback to manual scaling using predefined means and stds
+            scaled_features = np.zeros((len(data), len(config.FEATURES)))
+            for i, feature in enumerate(config.FEATURES):
+                values = data[feature].values
+                mean = self.feature_means.get(feature, values.mean())
+                std = self.feature_stds.get(feature, values.std() or 1.0)  # Avoid division by zero
+                scaled_features[:, i] = (values - mean) / std
         
-        scaled_features = self.scaler.transform(data[config.FEATURES])
         scaled_data = pd.DataFrame(scaled_features, columns=config.FEATURES)
         
         # Add target variable
@@ -78,10 +104,16 @@ class DataProcessor:
     
     def load_scaler(self):
         """Load a saved scaler."""
-        if os.path.exists(config.SCALER_SAVE_PATH):
-            self.scaler = joblib.load(config.SCALER_SAVE_PATH)
-            self.is_scaler_fitted = True
-            return True
+        try:
+            if os.path.exists(config.SCALER_SAVE_PATH):
+                self.scaler = joblib.load(config.SCALER_SAVE_PATH)
+                self.is_scaler_fitted = True
+                return True
+        except Exception as e:
+            print(f"Warning: Could not load scaler: {str(e)}. Will use default scaling.")
+        
+        # If we get here, we couldn't load the scaler
+        print("Using default feature scaling values")
         return False
     
     def create_sequences(self, data, time_steps=None):
