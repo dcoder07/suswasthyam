@@ -5,23 +5,58 @@ AI model implementation for health prediction based on vital signs.
 import os
 import json
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, GRU, Dropout, BatchNormalization
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.optimizers import Adam
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+
+# Try to import TensorFlow, but gracefully handle if it's not available
+try:
+    import tensorflow as tf
+    from tensorflow.keras.models import Sequential, load_model
+    from tensorflow.keras.layers import Dense, LSTM, GRU, Dropout, BatchNormalization
+    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+    from tensorflow.keras.optimizers import Adam
+    TENSORFLOW_AVAILABLE = True
+except ImportError:
+    TENSORFLOW_AVAILABLE = False
+    print("WARNING: TensorFlow could not be imported. Using model stub instead.")
+
+try:
+    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+except ImportError:
+    print("WARNING: scikit-learn metrics could not be imported.")
+
 import config
 
 # Define ModelStub class for use when model files are missing
 class ModelStub:
     """A stub model class that always returns a default value."""
     
+    def __init__(self):
+        """Initialize the stub model."""
+        self.name = "Model Stub"
+        self.is_stub = True
+    
     def predict(self, X):
         """Return a default prediction."""
-        # Just return some reasonable default values
-        batch_size = X.shape[0] if hasattr(X, 'shape') else 1
-        return np.array([[0.3]] * batch_size)  # Low risk prediction
+        # Check if X is a numpy array
+        if hasattr(X, 'shape'):
+            batch_size = X.shape[0]
+        else:
+            # Try to convert to numpy array
+            try:
+                X = np.array(X)
+                batch_size = X.shape[0]
+            except:
+                batch_size = 1
+                
+        # Return low risk predictions (0.3) for all samples
+        return np.array([[0.3]] * batch_size)
+        
+    def summary(self):
+        """Return a summary of the model."""
+        return "Model Stub (TensorFlow not available)"
+        
+    def get_weights(self):
+        """Return empty weights."""
+        return []
 
 # Import ModelStub from external file if available
 try:
@@ -38,79 +73,93 @@ class HealthPredictionModel:
         Initialize the health prediction model.
         
         Args:
-            input_shape (tuple): Shape of input data (time_steps, n_features)
-            model_type (str): Type of model to use ("lstm", "gru", or "mlp")
+            input_shape: The shape of input data
+            model_type: Type of model to use (lstm, gru, simple)
         """
         self.model = None
-        self.history = {"training": [], "fine_tuning": []}
-        self.is_stub = False
-        self.ModelStub = ModelStub  # Keep reference to ModelStub class
+        self.history = None
+        self.input_shape = input_shape or (config.SEQUENCE_LENGTH, config.NUM_FEATURES)
+        self.model_type = model_type or config.DEFAULT_MODEL_TYPE
+        self.is_stub = not TENSORFLOW_AVAILABLE
         
-        if input_shape is not None:
-            self.build_model(input_shape, model_type)
+        if not self.is_stub and TENSORFLOW_AVAILABLE:
+            try:
+                self.build_model(self.input_shape, self.model_type)
+            except Exception as e:
+                print(f"Failed to build model: {str(e)}")
+                self.is_stub = True
+                self.model = ModelStub()
+        else:
+            self.model = ModelStub()
+            
     
     def build_model(self, input_shape, model_type=None):
         """
-        Build the neural network model.
+        Build the neural network model architecture.
         
         Args:
-            input_shape (tuple): Shape of input data (time_steps, n_features)
-            model_type (str): Type of model to use
+            input_shape: Tuple specifying input dimensions
+            model_type: The type of RNN to use ('lstm', 'gru', or 'simple')
+        
+        Returns:
+            A compiled Keras model
         """
-        if model_type is None:
-            model_type = config.MODEL_TYPE
+        if not TENSORFLOW_AVAILABLE:
+            self.model = ModelStub()
+            return self.model
             
-        model = Sequential()
-        
-        if model_type.lower() == "lstm":
-            # LSTM-based model for time series
-            model.add(LSTM(config.HIDDEN_UNITS[0], return_sequences=True, 
-                          input_shape=input_shape))
+        try:
+            model_type = model_type or config.DEFAULT_MODEL_TYPE
+            
+            model = Sequential()
+            
+            if model_type.lower() == 'lstm':
+                # LSTM-based model
+                model.add(LSTM(64, input_shape=input_shape, return_sequences=True))
+                model.add(BatchNormalization())
+                model.add(Dropout(0.3))
+                model.add(LSTM(32))
+                model.add(BatchNormalization())
+                model.add(Dropout(0.3))
+                
+            elif model_type.lower() == 'gru':
+                # GRU-based model (typically faster than LSTM)
+                model.add(GRU(64, input_shape=input_shape, return_sequences=True))
+                model.add(BatchNormalization())
+                model.add(Dropout(0.3))
+                model.add(GRU(32))
+                model.add(BatchNormalization())
+                model.add(Dropout(0.3))
+                
+            else:
+                # Simple dense model
+                model.add(tf.keras.layers.Flatten(input_shape=input_shape))
+                model.add(Dense(64, activation='relu'))
+                model.add(BatchNormalization())
+                model.add(Dropout(0.3))
+            
+            # Common dense layers for all model types
+            model.add(Dense(32, activation='relu'))
             model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
+            model.add(Dropout(0.2))
+            model.add(Dense(16, activation='relu'))
+            model.add(Dense(1, activation='sigmoid'))  # Binary classification output
             
-            model.add(LSTM(config.HIDDEN_UNITS[1]))
-            model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
+            # Compile the model
+            model.compile(
+                optimizer=Adam(config.LEARNING_RATE),
+                loss='binary_crossentropy',
+                metrics=['accuracy']
+            )
             
-        elif model_type.lower() == "gru":
-            # GRU-based model for time series
-            model.add(GRU(config.HIDDEN_UNITS[0], return_sequences=True, 
-                         input_shape=input_shape))
-            model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
+            self.model = model
+            return model
             
-            model.add(GRU(config.HIDDEN_UNITS[1]))
-            model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
-            
-        elif model_type.lower() == "mlp":
-            # Simple MLP model
-            model.add(tf.keras.layers.Flatten(input_shape=input_shape))
-            model.add(Dense(config.HIDDEN_UNITS[0], activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
-            
-            model.add(Dense(config.HIDDEN_UNITS[1], activation='relu'))
-            model.add(BatchNormalization())
-            model.add(Dropout(config.DROPOUT_RATE))
-            
-        else:
-            raise ValueError(f"Unsupported model type: {model_type}")
-        
-        # Output layer - binary classification (0 = healthy, 1 = potential health issue)
-        model.add(Dense(1, activation='sigmoid'))
-        
-        # Compile model
-        model.compile(
-            optimizer=Adam(learning_rate=config.LEARNING_RATE),
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        self.model = model
-        
-        return model
+        except Exception as e:
+            print(f"Error building model: {str(e)}")
+            self.model = ModelStub()
+            self.is_stub = True
+            return self.model
     
     def train(self, X_train, y_train, X_val, y_val, epochs=None, batch_size=None):
         """
