@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Prediction System - Malaria Risk Assessment</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-card {
+            background-color: #1e3a8a;
+            color: white;
+        }
+
+        .form-card {
+            background-color: #fff;
+        }
+
+        .reading-card {
+            background-color: #f1f5f9;
+        }
+
+        .result-card {
+            border-left: 5px solid #0d6efd;
+        }
+
+        .high-risk {
+            background-color: #fecaca;
+            border-left: 5px solid #dc3545;
+        }
+
+        .moderate-risk {
+            background-color: #fed7aa;
+            border-left: 5px solid #fd7e14;
+        }
+
+        .low-risk {
+            background-color: #d1fae5;
+            border-left: 5px solid #198754;
+        }
+
+        .vital-sign-table th {
+            width: 25%;
+        }
+
+        .vital-sign-row:hover {
+            background-color: #f8f9fa;
+        }
+
+        .high-concern {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .moderate-concern {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+
+        .normal-concern {
+            color: #198754;
+        }
+
+        .loading {
+            display: none;
+        }
+
+        #prediction-results {
+            display: none;
+        }
+
+        #chart-container img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .disclaimer {
+            font-size: 0.8rem;
+            font-style: italic;
+            color: #6c757d;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="card header-card mb-4">
+            <div class="card-body">
+                <h1 class="card-title text-center">Health Prediction System</h1>
+                <h4 class="text-center">Malaria Risk Assessment Tool</h4>
+            </div>
+        </div>
+
+        <!-- Input Form -->
+        <div class="card form-card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h3>Add Vital Signs Reading</h3>
+            </div>
+            <div class="card-body">
+                <form id="reading-form">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="temperature" class="form-label">Temperature (°C)</label>
+                            <input type="number" step="0.1" class="form-control" id="temperature" required
+                                placeholder="36.5-37.5 normal range" min="30" max="43">
+                            <div class="form-text">Normal range: 36.5-37.5°C</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="spo2" class="form-label">Blood Oxygen/SpO2 (%)</label>
+                            <input type="number" class="form-control" id="spo2" required
+                                placeholder="95-100 normal range" min="70" max="100">
+                            <div class="form-text">Normal range: 95-100%</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="heart-rate" class="form-label">Heart Rate (bpm)</label>
+                            <input type="number" class="form-control" id="heart-rate" required
+                                placeholder="60-100 normal range" min="30" max="200">
+                            <div class="form-text">Normal range: 60-100 bpm</div>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary">Add Reading</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Readings Table -->
+        <div class="card reading-card mb-4">
+            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                <h3>Your Readings</h3>
+                <span id="reading-count" class="badge bg-light text-dark">0 readings</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped vital-sign-table">
+                        <thead>
+                            <tr>
+                                <th>Reading #</th>
+                                <th>Temperature (°C)</th>
+                                <th>SpO2 (%)</th>
+                                <th>Heart Rate (bpm)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="readings-table-body">
+                            <tr id="no-readings-row">
+                                <td colspan="4" class="text-center">No readings added yet. Add at least 4 readings to
+                                    get a prediction.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between mt-3">
+                    <button id="clear-readings" class="btn btn-outline-danger">Clear All Readings</button>
+                    <button id="predict-button" class="btn btn-success" disabled>Get Prediction</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="card mb-4 loading">
+            <div class="card-body text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Analyzing your vital signs data...</p>
+            </div>
+        </div>
+
+        <!-- Prediction Results -->
+        <div id="prediction-results">
+            <!-- Results Card -->
+            <div id="result-card" class="card result-card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3>Prediction Results</h3>
+                    <span id="risk-badge" class="badge bg-primary">Processing</span>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h4>Health Risk Assessment</h4>
+                            <p id="risk-description" class="lead">Your data is being analyzed...</p>
+                            <p id="risk-details"></p>
+                            <div id="risk-source" class="small text-muted mb-3"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div id="chart-container" class="text-center">
+                                <!-- Chart will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="malaria-warning" class="alert alert-warning" style="display: none;">
+                        <h5><i class="bi bi-exclamation-triangle-fill"></i> Regarding Malaria Risk:</h5>
+                        <p>The abnormal vital signs pattern could be consistent with malaria, especially if you've
+                            traveled to malaria-endemic regions recently. Malaria typically presents with:</p>
+                        <ul>
+                            <li>Cyclical fever spikes</li>
+                            <li>Chills and sweating</li>
+                            <li>Headache and body aches</li>
+                            <li>Fatigue</li>
+                        </ul>
+                        <p class="mb-0"><strong>IMPORTANT:</strong> This is not a diagnostic tool for malaria. If you
+                            suspect malaria, seek medical attention immediately for proper testing and diagnosis.</p>
+                    </div>
+
+                    <h4 class="mt-4">Vital Sign Analysis</h4>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Reading #</th>
+                                    <th>Temperature</th>
+                                    <th>SpO2</th>
+                                    <th>Heart Rate</th>
+                                    <th>Assessment</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analysis-table-body">
+                                <!-- Analysis rows will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="disclaimer mt-4">
+                        <p><strong>DISCLAIMER:</strong> This tool provides a risk assessment based on vital signs only.
+                            It is NOT a diagnosis. Always consult healthcare professionals for proper medical advice.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap & jQuery JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script>
+        $(document).ready(function () {
+            let readingsCount = 0;
+
+            // Add reading form submission
+            $("#reading-form").submit(function (e) {
+                e.preventDefault();
+
+                const temperature = parseFloat($("#temperature").val());
+                const spo2 = parseInt($("#spo2").val());
+                const heartRate = parseInt($("#heart-rate").val());
+
+                $.ajax({
+                    url: '/add_reading',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        temperature: temperature,
+                        spo2: spo2,
+                        heart_rate: heartRate
+                    }),
+                    success: function (response) {
+                        // Clear form
+                        $("#reading-form")[0].reset();
+
+                        // Update UI
+                        updateReadingsTable();
+                    },
+                    error: function (xhr) {
+                        alert("Error: " + xhr.responseJSON.error);
+                    }
+                });
+            });
+
+            // Clear readings button
+            $("#clear-readings").click(function () {
+                if (confirm("Are you sure you want to clear all readings?")) {
+                    $.ajax({
+                        url: '/clear_readings',
+                        type: 'POST',
+                        success: function () {
+                            updateReadingsTable();
+                        }
+                    });
+                }
+            });
+
+            // Predict button
+            $("#predict-button").click(function () {
+                // Show loading indicator
+                $("#loading").show();
+                $("#prediction-results").hide();
+
+                $.ajax({
+                    url: '/predict',
+                    type: 'POST',
+                    success: function (response) {
+                        // Hide loading indicator
+                        $("#loading").hide();
+
+                        // Display results
+                        displayResults(response);
+                    },
+                    error: function (xhr) {
+                        $("#loading").hide();
+                        alert("Error: " + xhr.responseJSON.error);
+                    }
+                });
+            });
+
+            // Function to update readings table
+            function updateReadingsTable() {
+                $.ajax({
+                    url: '/get_readings',
+                    type: 'GET',
+                    success: function (readings) {
+                        readingsCount = readings.length;
+
+                        // Update count display
+                        $("#reading-count").text(readingsCount + " readings");
+
+                        // Enable/disable predict button
+                        if (readingsCount >= 4) {
+                            $("#predict-button").prop("disabled", false);
+                        } else {
+                            $("#predict-button").prop("disabled", true);
+                        }
+
+                        // Update table
+                        const tableBody = $("#readings-table-body");
+                        tableBody.empty();
+
+                        if (readingsCount === 0) {
+                            tableBody.append('<tr id="no-readings-row"><td colspan="4" class="text-center">No readings added yet. Add at least 4 readings to get a prediction.</td></tr>');
+                        } else {
+                            readings.forEach((reading, index) => {
+                                tableBody.append(`
+                                    <tr class="vital-sign-row">
+                                        <td>${index + 1}</td>
+                                        <td>${reading.temperature}</td>
+                                        <td>${reading.spo2}</td>
+                                        <td>${reading.heart_rate}</td>
+                                    </tr>
+                                `);
+                            });
+                        }
+                    }
+                });
+            }
+
+            // Function to display prediction results
+            function displayResults(results) {
+                // Show results section
+                $("#prediction-results").show();
+
+                // Set risk information
+                const riskPercentage = results.risk_percentage;
+                const predictionClass = results.prediction_class;
+
+                let riskBadgeClass, resultCardClass, riskDescription;
+
+                if (predictionClass === 1) {
+                    if (parseFloat(riskPercentage) > 80) {
+                        riskBadgeClass = "bg-danger";
+                        resultCardClass = "high-risk";
+                        riskDescription = "HIGH RISK DETECTED";
+                    } else {
+                        riskBadgeClass = "bg-warning text-dark";
+                        resultCardClass = "moderate-risk";
+                        riskDescription = "ABNORMAL - Potential Health Concern";
+                    }
+                } else {
+                    if (parseFloat(riskPercentage) > 30) {
+                        riskBadgeClass = "bg-info text-dark";
+                        resultCardClass = "moderate-risk";
+                        riskDescription = "NORMAL - Monitor Symptoms";
+                    } else {
+                        riskBadgeClass = "bg-success";
+                        resultCardClass = "low-risk";
+                        riskDescription = "NORMAL - Low Risk";
+                    }
+                }
+
+                // Update risk badge
+                $("#risk-badge")
+                    .removeClass("bg-primary bg-danger bg-warning bg-info bg-success")
+                    .addClass(riskBadgeClass)
+                    .text(riskPercentage + " Risk");
+
+                // Update result card styling
+                $("#result-card")
+                    .removeClass("result-card high-risk moderate-risk low-risk")
+                    .addClass(resultCardClass);
+
+                // Update risk description
+                $("#risk-description").text(riskDescription);
+
+                // Update risk details
+                if (predictionClass === 1) {
+                    $("#risk-details").html("This suggests potential health concerns that may require attention. " +
+                        (parseFloat(riskPercentage) > 80 ? "<strong>Consider seeking medical attention promptly.</strong>" : ""));
+                } else {
+                    $("#risk-details").html("Your vital signs suggest a normal health status. " +
+                        (parseFloat(riskPercentage) > 30 ? "However, there is some level of risk. Continue to monitor your symptoms." : ""));
+                }
+
+                // Update risk source
+                $("#risk-source").text("Risk assessment based on " + results.prediction_source);
+
+                // Update vital sign analysis table
+                const analysisTableBody = $("#analysis-table-body");
+                analysisTableBody.empty();
+
+                results.reading_analysis.forEach((analysis, index) => {
+                    const reading = analysis.reading;
+
+                    // Determine concern level styling
+                    let concernClass = "normal-concern";
+                    if (analysis.concern_level === "High Concern") {
+                        concernClass = "high-concern";
+                    } else if (analysis.concern_level === "Moderate Concern") {
+                        concernClass = "moderate-concern";
+                    }
+
+                    // Create concerns text
+                    let concernsText = "";
+                    if (analysis.malaria_concerns.length > 0) {
+                        concernsText = `<br><span class="text-danger">Note: ${analysis.malaria_concerns.join(", ")} - can be consistent with malaria</span>`;
+                    }
+
+                    analysisTableBody.append(`
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${reading.temperature}°C</td>
+                            <td>${reading.spo2}%</td>
+                            <td>${reading.heart_rate} bpm</td>
+                            <td class="${concernClass}">
+                                ${analysis.concern_level} (Score: ${analysis.anomaly_score.toFixed(2)})
+                                ${concernsText}
+                            </td>
+                        </tr>
+                    `);
+                });
+
+                // Update chart
+                $("#chart-container").html(`<img src="data:image/png;base64,${results.plot_image}" alt="Vital Signs Chart">`);
+
+                // Show/hide malaria warning
+                if (results.show_malaria_warning) {
+                    $("#malaria-warning").show();
+                } else {
+                    $("#malaria-warning").hide();
+                }
+
+                // Scroll to results
+                $('html, body').animate({
+                    scrollTop: $("#prediction-results").offset().top - 20
+                }, 500);
+            }
+
+            // Initialize the readings table
+            updateReadingsTable();
+        });
+    </script>
+</body>
+
+</html>
