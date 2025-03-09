@@ -1,15 +1,38 @@
+# Exclude everything by default
+*
+
+# Then include only what we need
+!app_vercel.py
+!requirements-vercel.txt
+!vercel.json
+!templates/index.html
+!templates/health.html
+!templates/debug.html
+!static/css/*
+!static/js/*
+
 # Virtual environments
 venv/
 env/
 .env/
 
-# Local development files
+# Python files
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Exclude all the main app files that aren't needed for the lite version
+data_processor.py
+model.py
+app.py
+config.py
+run_*.py
+train.py
+evaluate.py
+predict.py
 
 # Large model files
 *.h5
@@ -21,6 +44,7 @@ models/
 # Development scripts
 run_bg.py
 start-server.ps1
+push_to_github.ps1
 
 # Logs
 *.log
@@ -28,4 +52,8 @@ flask.log
 
 # Local data
 *.csv
-data/ 
+data/
+
+# Git related
+.git/
+.github/ 
