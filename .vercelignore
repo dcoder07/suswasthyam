@@ -1,0 +1,31 @@
+# Virtual environments
+venv/
+env/
+.env/
+
+# Local development files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Large model files
+*.h5
+*.keras
+*.pb
+*.savedmodel
+models/
+
+# Development scripts
+run_bg.py
+start-server.ps1
+
+# Logs
+*.log
+flask.log
+
+# Local data
+*.csv
+data/ 
