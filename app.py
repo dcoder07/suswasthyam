@@ -15,12 +15,22 @@ import base64
 from io import BytesIO
 import json
 import uuid
+import sys
+import platform
+
+# Try to import dotenv for local development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load environment variables from .env file if it exists
+except ImportError:
+    pass  # Not critical if missing
 
 from data_processor import DataProcessor
 from model import HealthPredictionModel
 import config
 from utils.helpers import calculate_anomaly_score
 
+# Initialize Flask app
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  # For session management
 CORS(app)  # Enable Cross-Origin Resource Sharing
@@ -33,8 +43,15 @@ def get_model():
     """Get or initialize the model."""
     global model_cache
     if model_cache is None:
-        model_cache = HealthPredictionModel()
-        model_cache.load()
+        try:
+            model_cache = HealthPredictionModel()
+            model_cache.load()
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            # Make sure we always have a model, even if loading fails
+            model_cache = HealthPredictionModel()
+            model_cache.is_stub = True
+            model_cache.model = model_cache.ModelStub() if hasattr(model_cache, 'ModelStub') else None
     return model_cache
 
 def get_data_processor():
@@ -59,6 +76,11 @@ def index():
 def health_page():
     """Render the health check page."""
     return render_template('health.html')
+
+@app.route('/debug')
+def debug_page():
+    """Render the debug page for local development."""
+    return render_template('debug.html')
 
 @app.route('/add_reading', methods=['POST'])
 def add_reading():
@@ -156,7 +178,7 @@ def predict():
             processed_data = data_processor.preprocess_data(df, fit_scaler=False)
             X, _ = data_processor.create_sequences(processed_data)
             
-            if len(X) > 0:
+            if len(X) > 0 and model.model is not None:
                 prediction_prob = float(model.predict(X[-1:]).flatten()[0])
                 model_prediction = prediction_prob
                 
@@ -266,22 +288,29 @@ def predict():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for Vercel."""
-    return jsonify({
+    # Gather system information for debugging
+    system_info = {
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat()
-    })
+        'timestamp': datetime.now().isoformat(),
+        'python_version': sys.version,
+        'platform': platform.platform(),
+        'environment': {k: v for k, v in os.environ.items() if k.startswith(('FLASK_', 'PYTHON'))},
+        'model_loaded': model_cache is not None and hasattr(model_cache, 'model') and model_cache.model is not None,
+        'using_stub': model_cache is not None and getattr(model_cache, 'is_stub', False)
+    }
+    return jsonify(system_info)
 
-# Create necessary directories if they don't exist
-os.makedirs('static', exist_ok=True)
-os.makedirs('templates', exist_ok=True)
-os.makedirs('models', exist_ok=True)
+# Create necessary directories
+for directory in ['static', 'templates', 'models']:
+    os.makedirs(directory, exist_ok=True)
 
-# Check if the model exists, otherwise warn
-model_path = config.MODEL_SAVE_PATH
-if not os.path.exists(model_path):
-    print(f"WARNING: Model file not found at {model_path}")
-    print("The application will use anomaly score calculation for predictions.")
-
-# This is for local development only - Vercel will use the app object
+# This block only runs when directly executing this file
 if __name__ == '__main__':    
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    # Check if the model exists, otherwise warn
+    model_path = config.MODEL_SAVE_PATH
+    if not os.path.exists(model_path):
+        print(f"WARNING: Model file not found at {model_path}")
+        print("The application will use anomaly score calculation for predictions.")
+    
+    # Run the Flask application
+    app.run(debug=True, host='127.0.0.1', port=5000) 

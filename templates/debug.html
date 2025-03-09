@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Health Prediction System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #3366ff;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+
+        .status-good {
+            color: green;
+            font-weight: bold;
+        }
+
+        .status-warning {
+            color: orange;
+            font-weight: bold;
+        }
+
+        .status-error {
+            color: red;
+            font-weight: bold;
+        }
+
+        button {
+            background-color: #3366ff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background-color: #2952cc;
+        }
+
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Health Prediction System - Debug</h1>
+
+        <div class="section">
+            <h2>Environment</h2>
+            <div id="env-info">Loading...</div>
+        </div>
+
+        <div class="section">
+            <h2>API Status</h2>
+            <div id="api-status">Checking...</div>
+            <button id="check-health-btn">Check Health API</button>
+        </div>
+
+        <div class="section">
+            <h2>Model Status</h2>
+            <div id="model-status">Checking...</div>
+            <button id="test-model-btn">Test Model</button>
+        </div>
+
+        <div class="section">
+            <h2>Routes</h2>
+            <ul>
+                <li><a href="/" target="_blank">Main Application</a></li>
+                <li><a href="/health" target="_blank">Health Check Page</a></li>
+                <li><a href="/api/health" target="_blank">API Health Endpoint</a></li>
+            </ul>
+            <p>Make a simple prediction with test data:</p>
+            <button id="test-prediction-btn">Run Test Prediction</button>
+            <div id="prediction-result"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load environment info
+        function loadEnvironmentInfo() {
+            fetch('/api/health')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('env-info').innerHTML = `
+                        <p>Server time: ${data.timestamp}</p>
+                    `;
+                })
+                .catch(error => {
+                    document.getElementById('env-info').innerHTML = `
+                        <p class="status-error">Error fetching environment info: ${error.message}</p>
+                    `;
+                });
+        }
+
+        // Check API health
+        function checkHealth() {
+            const statusElement = document.getElementById('api-status');
+            statusElement.innerHTML = 'Checking...';
+
+            fetch('/api/health')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error(`HTTP error ${response.status}`);
+                })
+                .then(data => {
+                    statusElement.innerHTML = `
+                        <p class="status-good">API is operational!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                })
+                .catch(error => {
+                    statusElement.innerHTML = `
+                        <p class="status-error">API health check failed</p>
+                        <p>${error.message}</p>
+                    `;
+                });
+        }
+
+        // Test the model
+        function testModel() {
+            const statusElement = document.getElementById('model-status');
+            statusElement.innerHTML = 'Running model test...';
+
+            // Create dummy session data for testing
+            const testData = {
+                timestamp: new Date().toISOString(),
+                temperature: 37.2,
+                spo2: 96,
+                heart_rate: 80
+            };
+
+            // Add test reading
+            fetch('/add_reading', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testData)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    statusElement.innerHTML = `
+                    <p class="status-good">Test reading added successfully</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                })
+                .catch(error => {
+                    statusElement.innerHTML = `
+                    <p class="status-error">Failed to add test reading</p>
+                    <p>${error.message}</p>
+                `;
+                });
+        }
+
+        // Test prediction
+        function testPrediction() {
+            const resultElement = document.getElementById('prediction-result');
+            resultElement.innerHTML = 'Running test prediction...';
+
+            // Add 4 test readings
+            const testReadings = [
+                { temperature: 36.7, spo2: 98, heart_rate: 72 },
+                { temperature: 36.9, spo2: 97, heart_rate: 75 },
+                { temperature: 37.1, spo2: 96, heart_rate: 78 },
+                { temperature: 37.2, spo2: 95, heart_rate: 80 }
+            ];
+
+            // Clear existing readings
+            fetch('/clear_readings', { method: 'POST' })
+                .then(() => {
+                    // Add test readings sequentially
+                    const addReadings = async () => {
+                        for (const reading of testReadings) {
+                            await fetch('/add_reading', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(reading)
+                            });
+                        }
+                    };
+
+                    return addReadings();
+                })
+                .then(() => {
+                    // Make prediction
+                    return fetch('/predict', { method: 'POST' });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => {
+                            throw new Error(`Prediction failed: ${err.error}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    resultElement.innerHTML = `
+                        <p class="status-good">Prediction successful!</p>
+                        <p>Risk: ${data.risk_percentage}</p>
+                        <p>Source: ${data.prediction_source}</p>
+                        <details>
+                            <summary>View full response</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    `;
+                })
+                .catch(error => {
+                    resultElement.innerHTML = `
+                        <p class="status-error">Prediction failed</p>
+                        <p>${error.message}</p>
+                    `;
+                });
+        }
+
+        // Add event listeners
+        document.getElementById('check-health-btn').addEventListener('click', checkHealth);
+        document.getElementById('test-model-btn').addEventListener('click', testModel);
+        document.getElementById('test-prediction-btn').addEventListener('click', testPrediction);
+
+        // Initialize
+        loadEnvironmentInfo();
+        checkHealth();
+    </script>
+</body>
+
+</html>
