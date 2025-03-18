@@ -1,0 +1,5 @@
+[33mcommit 960b008d5cfd62d8b02552566606248ba77305bc[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: Dishank Patil <dishankjp05@gmail.com>
+Date:   Mon Mar 10 01:19:03 2025 +0530
+
+    Create lite version for Vercel with minimal dependencies

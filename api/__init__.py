@@ -1,1 +1,3 @@
-# This file makes the api directory a Python package 
+"""
+This file makes the api directory a Python package.
+""" 

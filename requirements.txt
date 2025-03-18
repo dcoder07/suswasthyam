@@ -1,1 +1,1 @@
-flask==2.3.2 
+# No external packages required for basic function 

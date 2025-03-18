@@ -1,23 +1,22 @@
 # Exclude everything by default
 *
 
-# Then include only what we need
-!app_vercel.py
-!requirements-vercel.txt
+# Then only include the API files necessary for serverless function
+!api/index.py
+!api/__init__.py
 !vercel.json
-!templates/index.html
-!templates/health.html
-!templates/debug.html
-!static/css/*
-!static/js/*
+!requirements.txt
+
+# Explicitly exclude directories
+node_modules
+venv
+__pycache__
 
 # Virtual environments
-venv/
 env/
 .env/
 
 # Python files
-__pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
